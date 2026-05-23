@@ -28,7 +28,7 @@ inngest_client = inngest.Inngest(
 async def rag_ingest_pdf(ctx: inngest.Context):
     def _load(ctx: inngest.Context) -> RAGChunkAndSrc:
         pdf_path = ctx.event.data["pdf_path"]
-        source_id = ctx.data.get("source_id", pdf_path)
+        source_id = ctx.event.data.get("source_id", pdf_path)
         chunks = load_and_chunk_pdf(pdf_path)
         return RAGChunkAndSrc(chunks=chunks, source_id=source_id)
 
@@ -56,7 +56,7 @@ async def rag_query_pdf_ai(ctx: inngest.Context):
         query_vec = embed_texts([question])[0]
         store = QdrantStorage()
         found = store.search(query_vec, top_k)
-        return RAGSearchResult(context=found["contexts"], sources=found["sources"])
+        return RAGSearchResult(contexts=found["contexts"], sources=found["sources"])
 
     question = ctx.event.data["question"]
     top_k = int(ctx.event.data.get("top_k", 5))
