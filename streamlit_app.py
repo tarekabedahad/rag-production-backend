@@ -1,7 +1,6 @@
-import asyncio
-from pathlib import Path
 import streamlit as st
 import inngest
+from pathlib import Path
 from dotenv import load_dotenv
 import os
 
@@ -26,33 +25,12 @@ def save_uploaded_pdf(file) -> Path:
     return file_path
 
 
-async def send_rag_ingest_event(pdf_path: Path) -> None:
+
+def trigger_inngest_event(event_name: str, data: dict):
     client = get_inngest_client()
-    await client.send(
-        inngest.Event(
-            name="rag/ingest_pdf",
-            data={"pdf_path": str(pdf_path.resolve()), "source_id": pdf_path.name}
-        )
-    )
 
-
-async def send_rag_query_event(question: str, top_k: int) -> str:
-    client = get_inngest_client()
-    response = await client.send(
-        inngest.Event(
-            name="rag/query_pdf_ai",
-            data={"question": question, "top_k": top_k}
-        )
-    )
-    return response.ids[0]
-
-
-def run_inngest_event(coro):
-    try:
-        loop = asyncio.get_running_loop()
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
+    ids = client.send_sync(inngest.Event(name=event_name, data=data))
+    return ids[0]
 
 
 st.title("📄 RAG Production Dashboard")
@@ -66,8 +44,11 @@ with col1:
     if uploaded and st.button("Ingest File", type="primary"):
         with st.spinner("Processing..."):
             path = save_uploaded_pdf(uploaded)
-            run_inngest_event(send_rag_ingest_event(path))
-        st.success(f"Added: {path.name}")
+            event_id = trigger_inngest_event("rag/ingest_pdf", {
+                "pdf_path": str(path.resolve()),
+                "source_id": path.name
+            })
+        st.success(f"Ingestion triggered! ID: {event_id}")
 
 with col2:
     st.subheader("🔍 Ask a Question")
@@ -78,7 +59,10 @@ with col2:
 
         if submitted and question.strip():
             with st.spinner("Submitting to knowledge base..."):
-                event_id = run_inngest_event(send_rag_query_event(question.strip(), int(top_k)))
+                event_id = trigger_inngest_event("rag/query_pdf_ai", {
+                    "question": question.strip(),
+                    "top_k": int(top_k)
+                })
 
             st.success("Query submitted successfully!")
             st.info(f"Tracking ID: `{event_id}`")
