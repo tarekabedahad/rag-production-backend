@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 import os
 import requests
 
-
 load_dotenv()
 st.set_page_config(page_title="RAG Assistant", page_icon="🤖", layout="wide")
 
@@ -19,7 +18,6 @@ def get_inngest_client() -> inngest.Inngest:
         is_production=True,
         event_key=os.getenv("INNGEST_EVENT_KEY")
     )
-
 
 
 def save_uploaded_pdf(file) -> Path:
@@ -64,10 +62,8 @@ def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s
         time.sleep(poll_interval_s)
 
 
-
 st.title("📄 RAG Production Dashboard")
 st.markdown("---")
-
 
 col1, col2 = st.columns([1, 2])
 
@@ -90,12 +86,13 @@ with col2:
 
         if submitted and question.strip():
             with st.spinner("Consulting knowledge base..."):
-
                 event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
+                output = wait_for_run_output(event_id)
+                answer = output.get("answer", "")
+                sources = output.get("sources", [])
 
-            st.success("Query submitted successfully!")
-            st.info(f"Tracking ID: `{event_id}`")
-            st.markdown("Check the [Inngest Dashboard](https://app.inngest.com/) to monitor the progress.")
+            st.success("Answer generated!")
+            st.markdown(f"**AI Response:**\n\n{answer}")
 
             if sources:
                 with st.expander("View Sources"):
