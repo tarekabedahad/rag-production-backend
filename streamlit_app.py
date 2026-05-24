@@ -5,7 +5,7 @@ import inngest
 
 st.set_page_config(page_title="RAG Assistant", page_icon="🤖", layout="wide")
 
-FASTAPI_URL = "https://your-app.onrender.com"
+FASTAPI_URL = "http://127.0.0.1:8000"
 
 
 def save_pdf(file) -> Path:
