@@ -85,14 +85,14 @@ with col2:
         submitted = st.form_submit_button("Submit Question")
 
         if submitted and question.strip():
-            with st.spinner("Consulting knowledge base..."):
-                event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
-                output = wait_for_run_output(event_id)
-                answer = output.get("answer", "")
-                sources = output.get("sources", [])
+            with st.spinner("Submitting to knowledge base..."):
 
-            st.success("Answer generated!")
-            st.markdown(f"**AI Response:**\n\n{answer}")
+                event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
+
+            st.success("Query submitted successfully!")
+            st.info(f"Tracking ID: `{event_id}`")
+            st.markdown(
+                "Check the [Inngest Dashboard](https://app.inngest.com/) to monitor the progress of your query.")
 
             if sources:
                 with st.expander("View Sources"):
