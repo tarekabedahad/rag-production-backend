@@ -19,6 +19,7 @@ def get_inngest_client() -> inngest.Inngest:
         is_production=True,
         event_key=os.getenv("INNGEST_EVENT_KEY")
     )
+    )
 
 
 def save_uploaded_pdf(file) -> Path:
