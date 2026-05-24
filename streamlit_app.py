@@ -16,7 +16,8 @@ st.set_page_config(page_title="RAG Assistant", page_icon="🤖", layout="wide")
 def get_inngest_client() -> inngest.Inngest:
     return inngest.Inngest(
         app_id="rag_app",
-        is_production=True
+        is_production=True,
+        event_key=os.getenv("INNGEST_EVENT_KEY")
     )
 
 
