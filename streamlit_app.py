@@ -7,14 +7,17 @@ from dotenv import load_dotenv
 import os
 import requests
 
-# --- Keep all your existing backend functions exactly as they are ---
+
 load_dotenv()
 st.set_page_config(page_title="RAG Assistant", page_icon="🤖", layout="wide")
 
 
 @st.cache_resource
 def get_inngest_client() -> inngest.Inngest:
-    return inngest.Inngest(app_id="rag_app", is_production=False)
+    return inngest.Inngest(
+        app_id="rag_app",
+        is_production=True
+    )
 
 
 def save_uploaded_pdf(file) -> Path:
@@ -38,7 +41,7 @@ async def send_rag_query_event(question: str, top_k: int) -> None:
 
 
 def _inngest_api_base() -> str:
-    return os.getenv("INNGEST_API_BASE", "http://127.0.0.1:8288/v1")
+    return os.getenv("INNGEST_API_BASE", "https://api.inngest.com")
 
 
 def fetch_runs(event_id: str) -> list[dict]:
@@ -59,11 +62,11 @@ def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s
         time.sleep(poll_interval_s)
 
 
-# --- Redesigned UI ---
+
 st.title("📄 RAG Production Dashboard")
 st.markdown("---")
 
-# Use columns to separate Ingestion and Querying
+
 col1, col2 = st.columns([1, 2])
 
 with col1:

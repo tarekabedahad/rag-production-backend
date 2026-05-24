@@ -4,15 +4,11 @@ from qdrant_client.models import VectorParams, Distance, PointStruct
 
 class QdrantStorage:
     def __init__(self, collection="production_docs", dim=3072):
-        
+
         url = os.getenv("QDRANT_URL")
         api_key = os.getenv("QDRANT_API_KEY")
 
-
-        self.client = QdrantClient(
-            url=url,
-            api_key=api_key
-        )
+        self.client = QdrantClient(url=url, api_key=api_key)
         self.collection = collection
 
 
