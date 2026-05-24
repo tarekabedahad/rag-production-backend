@@ -3,7 +3,7 @@ import streamlit as st
 import requests
 import inngest
 
-st.set_page_config(page_title="RAG Assistant", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="RAG Assistant", page_icon="RAG", layout="wide")
 
 FASTAPI_URL = "http://127.0.0.1:8000"
 
@@ -39,7 +39,7 @@ def send_ingest_event(pdf_path: Path):
 
 
 
-st.title("📄 RAG Assistant")
+st.title(" RAG Assistant")
 
 col1, col2 = st.columns(2)
 
@@ -103,10 +103,10 @@ with col2:
 
         st.success("Answer ready!")
 
-        st.markdown("### 🤖 Answer")
+        st.markdown("###  Answer")
         st.write(data.get("answer", ""))
 
         if data.get("sources"):
-            st.markdown("### 📚 Sources")
+            st.markdown("###  Sources")
             for s in data["sources"]:
                 st.write(f"- {s}")
