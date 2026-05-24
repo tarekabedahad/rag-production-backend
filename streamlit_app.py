@@ -1,96 +1,112 @@
-import asyncio
 from pathlib import Path
-import time
 import streamlit as st
-import inngest
-from dotenv import load_dotenv
-import os
 import requests
+import inngest
 
-load_dotenv()
 st.set_page_config(page_title="RAG Assistant", page_icon="🤖", layout="wide")
 
-
-@st.cache_resource
-def get_inngest_client() -> inngest.Inngest:
-    return inngest.Inngest(app_id="rag_app", is_production=False)
+FASTAPI_URL = "http://127.0.0.1:8000"
 
 
-def save_uploaded_pdf(file) -> Path:
-    uploads_dir = Path("uploads")
-    uploads_dir.mkdir(parents=True, exist_ok=True)
-    file_path = uploads_dir / file.name
-    file_path.write_bytes(file.getbuffer())
-    return file_path
+def save_pdf(file) -> Path:
+    folder = Path("uploads")
+    folder.mkdir(exist_ok=True)
+
+    path = folder / file.name
+    path.write_bytes(file.getbuffer())
+    return path
 
 
-async def send_rag_ingest_event(pdf_path: Path) -> None:
-    client = get_inngest_client()
-    await client.send(
-        inngest.Event(name="rag/ingest_pdf", data={"pdf_path": str(pdf_path.resolve()), "source_id": pdf_path.name}))
+def list_pdfs():
+    folder = Path("uploads")
+    if not folder.exists():
+        return []
+    return [f.name for f in folder.glob("*.pdf")]
 
 
-async def send_rag_query_event(question: str, top_k: int) -> None:
-    client = get_inngest_client()
-    result = await client.send(inngest.Event(name="rag/query_pdf_ai", data={"question": question, "top_k": top_k}))
-    return result[0]
+def send_ingest_event(pdf_path: Path):
+    client = inngest.Inngest(app_id="rag_app", is_production=False)
+
+    return client.send(
+        inngest.Event(
+            name="rag/ingest_pdf",
+            data={
+                "pdf_path": str(pdf_path.resolve()),
+                "source_id": pdf_path.name
+            }
+        )
+    )
 
 
-def _inngest_api_base() -> str:
-    return os.getenv("INNGEST_API_BASE", "http://127.0.0.1:8288/v1")
+
+st.title("📄 RAG Assistant")
+
+col1, col2 = st.columns(2)
 
 
-def fetch_runs(event_id: str) -> list[dict]:
-    resp = requests.get(f"{_inngest_api_base()}/events/{event_id}/runs")
-    resp.raise_for_status()
-    return resp.json().get("data", [])
-
-
-def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s: float = 0.5) -> dict:
-    start = time.time()
-    while True:
-        runs = fetch_runs(event_id)
-        if runs:
-            status = runs[0].get("status")
-            if status in ("Completed", "Succeeded", "Success", "Finished"): return runs[0].get("output") or {}
-            if status in ("Failed", "Cancelled"): raise RuntimeError(f"Run {status}")
-        if time.time() - start > timeout_s: raise TimeoutError("Timed out.")
-        time.sleep(poll_interval_s)
-
-
-st.title("📄 RAG Production Dashboard")
-st.markdown("---")
-
-col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.subheader("📤 Upload Document")
-    uploaded = st.file_uploader("Select a PDF", type=["pdf"])
-    if uploaded and st.button("Ingest File", type="primary"):
-        with st.spinner("Processing..."):
-            path = save_uploaded_pdf(uploaded)
-            asyncio.run(send_rag_ingest_event(path))
-            time.sleep(0.3)
-        st.success(f"Added: {path.name}")
+    st.subheader("Upload PDF")
+
+    file = st.file_uploader("Choose PDF", type=["pdf"])
+
+    if file and st.button("Ingest PDF"):
+        path = save_pdf(file)
+        send_ingest_event(path)
+        st.success(f"Sent for processing: {path.name}")
+
+
 
 with col2:
-    st.subheader("🔍 Ask a Question")
-    with st.form("rag_query_form", clear_on_submit=False):
-        question = st.text_input("Enter your query:", placeholder="e.g., How do I start the device?")
-        top_k = st.slider("Retrieval Depth", 1, 10, 5, help="Number of context chunks to pull")
-        submitted = st.form_submit_button("Submit Question")
+    st.subheader("Ask Questions")
 
-        if submitted and question.strip():
-            with st.spinner("Consulting knowledge base..."):
-                event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
-                output = wait_for_run_output(event_id)
-                answer = output.get("answer", "")
-                sources = output.get("sources", [])
+    files = list_pdfs()
+    selected = st.selectbox("Select PDF", files)
 
-            st.success("Answer generated!")
-            st.markdown(f"**AI Response:**\n\n{answer}")
+    question = st.text_input("Your question")
+    top_k = st.slider("Top K", 1, 10, 5)
 
-            if sources:
-                with st.expander("View Sources"):
-                    for s in sources:
-                        st.markdown(f"• `{s}`")
+    if st.button("Ask"):
+
+        if not selected:
+            st.error("Please select a PDF first")
+            st.stop()
+
+        if not question.strip():
+            st.error("Enter a question")
+            st.stop()
+
+        payload = {
+            "question": question,
+            "top_k": top_k,
+            "source_filter": selected
+        }
+
+        with st.spinner("Thinking..."):
+
+            try:
+                res = requests.post(
+                    f"{FASTAPI_URL}/query",
+                    json=payload,
+                    timeout=120
+                )
+
+                data = res.json()
+
+                if res.status_code != 200:
+                    st.error(data)
+                    st.stop()
+
+            except Exception as e:
+                st.error(f"Backend error: {e}")
+                st.stop()
+
+        st.success("Answer ready!")
+
+        st.markdown("### 🤖 Answer")
+        st.write(data.get("answer", ""))
+
+        if data.get("sources"):
+            st.markdown("### 📚 Sources")
+            for s in data["sources"]:
+                st.write(f"- {s}")
