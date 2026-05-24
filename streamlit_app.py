@@ -88,15 +88,16 @@ with col2:
         top_k = st.slider("Retrieval Depth", 1, 10, 5, help="Number of context chunks to pull")
         submitted = st.form_submit_button("Submit Question")
 
-        if submitted and question.strip():
-            with st.spinner("Consulting knowledge base..."):
-                event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
-                output = wait_for_run_output(event_id)
-                answer = output.get("answer", "")
-                sources = output.get("sources", [])
 
-            st.success("Answer generated!")
-            st.markdown(f"**AI Response:**\n\n{answer}")
+        if submitted and question.strip():
+            with st.spinner("Submitting to knowledge base..."):
+
+                event_id = await send_rag_query_event(question.strip(), int(top_k))
+
+            st.success("Query submitted successfully!")
+            st.info(f"Tracking ID: `{event_id}`")
+            st.markdown(
+                "Check the [Inngest Dashboard](https://app.inngest.com/) to monitor the progress of your query.")
 
             if sources:
                 with st.expander("View Sources"):
