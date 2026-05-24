@@ -1,11 +1,9 @@
 import asyncio
 from pathlib import Path
-import time
 import streamlit as st
 import inngest
 from dotenv import load_dotenv
 import os
-import requests
 
 load_dotenv()
 st.set_page_config(page_title="RAG Assistant", page_icon="🤖", layout="wide")
@@ -31,35 +29,30 @@ def save_uploaded_pdf(file) -> Path:
 async def send_rag_ingest_event(pdf_path: Path) -> None:
     client = get_inngest_client()
     await client.send(
-        inngest.Event(name="rag/ingest_pdf", data={"pdf_path": str(pdf_path.resolve()), "source_id": pdf_path.name}))
+        inngest.Event(
+            name="rag/ingest_pdf",
+            data={"pdf_path": str(pdf_path.resolve()), "source_id": pdf_path.name}
+        )
+    )
 
 
-async def send_rag_query_event(question: str, top_k: int) -> None:
+async def send_rag_query_event(question: str, top_k: int) -> str:
     client = get_inngest_client()
-    result = await client.send(inngest.Event(name="rag/query_pdf_ai", data={"question": question, "top_k": top_k}))
-    return result[0]
+    response = await client.send(
+        inngest.Event(
+            name="rag/query_pdf_ai",
+            data={"question": question, "top_k": top_k}
+        )
+    )
+    return response.ids[0]
 
 
-def _inngest_api_base() -> str:
-    return os.getenv("INNGEST_API_BASE", "https://api.inngest.com")
-
-
-def fetch_runs(event_id: str) -> list[dict]:
-    resp = requests.get(f"{_inngest_api_base()}/events/{event_id}/runs")
-    resp.raise_for_status()
-    return resp.json().get("data", [])
-
-
-def wait_for_run_output(event_id: str, timeout_s: float = 120.0, poll_interval_s: float = 0.5) -> dict:
-    start = time.time()
-    while True:
-        runs = fetch_runs(event_id)
-        if runs:
-            status = runs[0].get("status")
-            if status in ("Completed", "Succeeded", "Success", "Finished"): return runs[0].get("output") or {}
-            if status in ("Failed", "Cancelled"): raise RuntimeError(f"Run {status}")
-        if time.time() - start > timeout_s: raise TimeoutError("Timed out.")
-        time.sleep(poll_interval_s)
+def run_inngest_event(coro):
+    try:
+        loop = asyncio.get_running_loop()
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
 
 
 st.title("📄 RAG Production Dashboard")
@@ -73,28 +66,21 @@ with col1:
     if uploaded and st.button("Ingest File", type="primary"):
         with st.spinner("Processing..."):
             path = save_uploaded_pdf(uploaded)
-            asyncio.run(send_rag_ingest_event(path))
-            time.sleep(0.3)
+            run_inngest_event(send_rag_ingest_event(path))
         st.success(f"Added: {path.name}")
 
 with col2:
     st.subheader("🔍 Ask a Question")
     with st.form("rag_query_form", clear_on_submit=False):
         question = st.text_input("Enter your query:", placeholder="e.g., How do I start the device?")
-        top_k = st.slider("Retrieval Depth", 1, 10, 5, help="Number of context chunks to pull")
+        top_k = st.slider("Retrieval Depth", 1, 10, 5)
         submitted = st.form_submit_button("Submit Question")
 
         if submitted and question.strip():
             with st.spinner("Submitting to knowledge base..."):
-
-                event_id = asyncio.run(send_rag_query_event(question.strip(), int(top_k)))
+                event_id = run_inngest_event(send_rag_query_event(question.strip(), int(top_k)))
 
             st.success("Query submitted successfully!")
             st.info(f"Tracking ID: `{event_id}`")
             st.markdown(
                 "Check the [Inngest Dashboard](https://app.inngest.com/) to monitor the progress of your query.")
-
-            if sources:
-                with st.expander("View Sources"):
-                    for s in sources:
-                        st.markdown(f"• `{s}`")
